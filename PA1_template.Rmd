@@ -1,25 +1,205 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "Amirrudin Bin Dahlan"
+date: "Tuesday, October 14, 2014"
+output: html_document
+keep_md: true
 ---
 
+###Important notes before running script: 
+1. Download and unzip file to working directory of RStudio
+2. File name will be activity.csv
+3. Install packages lubridate, ggplot2, dplyr, lattice
 
-## Loading and preprocessing the data
+###Loading and preprocessing the data
+
+```{r message=FALSE, warning=FALSE, echo = TRUE}
+# load packages
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(lattice)
+
+# load file into system
+activity <- read.csv("activity.csv", 
+                     colClasses = c("numeric", "character","numeric"))
+
+# convert to date time format for date column
+activity$date=ymd(activity$date)
+```
+
+###Histogram of the total number of steps taken each day
+
+```{r echo = TRUE}
+# use dplyr method to sum steps by date and rename the column names
+total_steps=activity %>% group_by(date) %>% summarise(sum(steps,na.rm = TRUE))
+colnames(total_steps) = c("date","steps")
+
+# make a histogram of the total number of steps taken each day
+ggplot(total_steps,aes(x=date,y=steps)) + geom_histogram(stat="identity")
+```
+
+###Mean and median number of steps taken each day
+
+```{r echo = TRUE}
+# calculate and report Mean total number of steps taken per day
+mean(total_steps$steps)
+
+# calculate and report Median total number of steps taken per day
+median(total_steps$steps)
+```
+
+### Time series plot of the average number of steps taken (averaged across all days) versus the 5-minute intervals
+
+```{r echo = TRUE}
+# using dplyr method, group by interval, calculate mean of steps and rename columns
+data_mean = activity %>% group_by(interval) %>% summarise(mean(steps,na.rm = TRUE))
+colnames(data_mean) = c("interval","mean")
+
+# create the time series plot
+ggplot(data_mean,aes(x=interval,y=mean)) + geom_line() + xlab("Time of day") + ylab("Mean number of steps") 
+```
+
+### Report the 5-minute interval that, on average, contains the maximum number of steps
+
+```{r echo = TRUE}
+# use filter function to see highest mean. The answer is 835 as seen below:
+max_interval=filter(data_mean, mean == max(mean))[1]
+max_interval
+```
+
+To proof that the interval is correct, the highest mean step is denoted with a vertical line as shown below.
+
+It shows the intersection with the highest point.
+```{r echo = TRUE}
+ggplot(data_mean,aes(x=interval,y=mean)) + geom_line() + xlab("Time of day") + ylab("Mean number of steps") + geom_vline(xintercept = as.numeric(max_interval), colour="red", linetype = "longdash") 
+```
+
+###Imputing missing values
+
+###Calculate and report the total number of missing values in the dataset 
+
+```{r echo = TRUE}
+# To find out the number of missing values, the command belows uses the summary command.
+# The 7th item refers to the number of NA's, which is equivalent to the number of missing value.
+summary(activity$steps)[7]
+```
+
+###Code strategy for imputing missing data
+
+The strategy will be to assign the missing intervals with the mean value of the respective intervals.
+
+```{r echo = TRUE}
+# calculate the mean of each interval and rename columns 
+data_mean = activity %>% group_by(interval) %>% summarise(mean(steps,na.rm = TRUE))
+colnames(data_mean) = c("interval","mean")
+
+# loop the data set, seek those missing values replace them with mean values
+
+# create temp copy
+activity_temp = activity
+
+# loop data set
+for(n in 1:nrow(activity_temp))
+{
+  # find those with NA
+  if(is.na(activity_temp[n,1]) == TRUE)
+  {
+    
+    # seek the correct mean value
+    value_to_set = filter(data_mean,interval == activity_temp[n,3])
+    
+    # replace null value with new mean value
+    activity_temp[n,1] = value_to_set$mean
+    
+  }
+  
+}
+```
+
+###Histogram of the total number of steps taken each day after missing values were imputed
+
+```{r echo = TRUE}
+# show header summary of new dataset to showcase that empty fields are filled
+head(activity_temp)
+
+# convert to date time format for date column
+activity_temp$date=ymd(activity_temp$date)
+
+# plot histogram
+ggplot(activity_temp,aes(x=date,y=steps)) + geom_histogram(stat="identity")
+```
+
+###Mean and median total number of steps taken per day after missing values were imputed
+```{r echo = TRUE}
+# use dplyr method to sum steps by date and rename the column names
+total_steps1=activity_temp %>% group_by(date) %>% summarise(sum(steps,na.rm = TRUE))
+colnames(total_steps1) = c("date","steps")
+
+# calculate mean
+mean(total_steps1$steps)
+
+# calculate median
+median(total_steps1$steps)
+```
+
+###Do these values differ from the estimates from the first part of the assignment? 
+
+Yes, the outcome is different as those empty values are now populated with mean values of the intervals. 
+
+###What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+There is an implication on the mean and media. 
+
+The mean and median of the new data set are similar to each other.
+
+However the mean and median of the new data are now higher than the mean and median of the original data.
+
+###Following section contain codes to compare differences in activity patterns between weekdays and weekends:
+
+```{r echo = TRUE}
+# Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+# create a new column to determine day name
+activity_temp1= mutate(activity_temp,
+                       day_type=weekdays(activity_temp[,2]))
 
 
+# convert from factor to character type of the new column
+activity_temp1[,4]=as.character(activity_temp1[,4])
 
-## What is mean total number of steps taken per day?
+# loop column to replace values of new column to Weekend or Weekday
+for(n in 1:nrow(activity_temp1))
+{
+  if(activity_temp1[n,4] == 'Sunday' ||  activity_temp1[n,4] == 'Saturday' )
+  {
+    # set to weekend
+    activity_temp1[n,4] = "Weekend"    
+  }
+  else
+  {
+    # set to weekend
+    activity_temp1[n,4] = "Weekday"    
+    
+  }
+}
 
+# set column class of new column to factor
+activity_temp1$day_type=as.factor(activity_temp1$day_type)
 
+# view data set
+str(activity_temp1)
 
-## What is the average daily activity pattern?
+```
 
+###Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
 
+```{r echo = TRUE}
+# use dplyr method to sum steps by date and rename the column names
+final_plot=activity_temp1 %>% group_by(day_type,date) %>% summarise(mean(steps,na.rm = TRUE))
+colnames(final_plot) = c("day_type","date","mean_steps")
 
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+# plot via lattice function xyplot
+xyplot(mean_steps ~ date | day_type , final_plot, type = "l", layout = c(1, 2),
+       xlab = "Interval", ylab = "Number of steps")
+```
